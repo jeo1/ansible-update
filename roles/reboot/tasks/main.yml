@@ -1,9 +1,29 @@
-- name: Check that the reboot-requied exists
-  stat:
-    path: /var/run/reboot-required
-  register: reboot_required_file
+- block:
+  - name: Check that the reboot-requied exists
+    stat:
+      path: /var/run/reboot-required
+    register: reboot_required_file
 
-- name: Automated reboot
-  reboot:
-  when:
-    - reboot_required_file.stat.exists == true
+  - name: Automated reboot
+    reboot:
+    when:
+      - reboot_required_file.stat.exists == true
+  when: ansible_distribution in ["Debian", "Ubuntu"]
+
+- block:
+  - name: Check if new kernel is available
+    shell: |
+      set -o pipefail
+      apk -u list | grep '^linux-virt'
+      echo $?
+    register: kernel_check
+    changed_when: false
+
+  - set_fact:
+      kernel_update_available: "{{ kernel_check.stdout_lines[-1] == '0' }}"
+
+  - name: Reboot if new kernel is available
+    reboot:
+    when: 
+      - kernel_update_available
+  when: ansible_distribution in ["Alpine"]
